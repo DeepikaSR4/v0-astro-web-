@@ -1,3 +1,4 @@
+// components/chat-interface.tsx
 "use client"
 
 import type React from "react"
@@ -10,7 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ArrowLeft, Sparkles, Loader2 } from "lucide-react"
+import { Send, ArrowLeft, Sparkles, Loader2, Heart, Briefcase, DollarSign } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 interface Message {
@@ -24,13 +25,11 @@ interface ChatInterfaceProps {
   type: "love" | "career" | "finance"
   title: string
   description: string
-  icon: LucideIcon
-  iconColor: string
-  bgGradient: string
+  // Removed icon, iconColor, and bgGradient from props
 }
 
 const mockResponses = {
-  love: [
+    love: [
     "The stars reveal that Venus is strongly positioned in your chart, suggesting a period of romantic growth ahead. Your heart chakra is opening to new possibilities.",
     "I sense a deep connection forming in your near future. The cosmic energies suggest someone with earth sign qualities may play a significant role in your love life.",
     "Your romantic journey is guided by the moon's phases. Trust your intuition when it comes to matters of the heart - the universe is aligning to bring you closer to your soulmate.",
@@ -47,7 +46,25 @@ const mockResponses = {
   ],
 }
 
-export function ChatInterface({ type, title, description, icon: Icon, iconColor, bgGradient }: ChatInterfaceProps) {
+const iconMap: Record<ChatInterfaceProps["type"], LucideIcon> = {
+  love: Heart,
+  career: Briefcase,
+  finance: DollarSign,
+}
+
+const iconColorMap: Record<ChatInterfaceProps["type"], string> = {
+  love: "text-red-500",
+  career: "text-blue-500",
+  finance: "text-green-500",
+}
+
+const bgGradientMap: Record<ChatInterfaceProps["type"], string> = {
+  love: "from-red-50 to-pink-50 dark:from-red-950/20 dark:to-pink-950/20",
+  career: "from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20",
+  finance: "from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20",
+}
+
+export function ChatInterface({ type, title, description }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -55,6 +72,10 @@ export function ChatInterface({ type, title, description, icon: Icon, iconColor,
   const { user, decrementChats } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+  
+  const Icon = iconMap[type]
+  const iconColor = iconColorMap[type]
+  const bgGradient = bgGradientMap[type]
 
   useEffect(() => {
     if (!user) {

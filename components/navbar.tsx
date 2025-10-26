@@ -14,9 +14,7 @@ export function Navbar() {
 
   const navItems = [
     { href: "/", label: "Home", icon: Stars },
-    { href: "/love", label: "Love", icon: Heart },
-    { href: "/career", label: "Career", icon: Briefcase },
-    { href: "/finance", label: "Finance", icon: DollarSign },
+
     { href: "/pricing", label: "Pricing", icon: CreditCard },
   ]
 
@@ -54,7 +52,9 @@ export function Navbar() {
             <ThemeToggle />
             {user ? (
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-muted-foreground">{user.chatsLeft} chats left</span>
+                <Link href= "/pricing">
+                <span className="text-sm text-muted-foreground text-underline">{user.chatsLeft} chats left</span>
+                </Link>
                 <Link href="/profile">
                   <Button variant="ghost" size="sm">
                     <User className="h-4 w-4 mr-1" />
