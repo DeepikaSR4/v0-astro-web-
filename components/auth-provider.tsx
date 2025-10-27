@@ -8,14 +8,14 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
-  User as FirebaseUser,
+  type User as FirebaseUser,
 } from "firebase/auth"
 import {
   doc,
   setDoc,
   updateDoc,
   onSnapshot,
-  Unsubscribe,
+  type Unsubscribe,
   getDoc,
   // Added Firestore functions necessary for the logic
   // If you are missing these imports in your actual file, please add them.
@@ -63,76 +63,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // CRITICAL CLEANUP on dependency change
     if (userSnapshotUnsubscribe) {
-        userSnapshotUnsubscribe()
-        setUserSnapshotUnsubscribe(null)
+      userSnapshotUnsubscribe()
+      setUserSnapshotUnsubscribe(null)
     }
-    
+
     // Only proceed if we have an authenticated Firebase user
     if (firebaseAuthUser) {
       const userDocRef = doc(db, "users", firebaseAuthUser.uid)
-      
+
       // Setup the REAL-TIME listener
-      const unsubscribe = onSnapshot(userDocRef, async (docSnap) => {
-        if (docSnap.exists()) {
-          // Document exists: update state with live data
-          const userData = docSnap.data() as Omit<User, "id">
-          setUser({ ...userData, id: firebaseAuthUser.uid })
-        } else {
-          // Document missing: This is a new user who signed up but the listener beat the write
-          // OR the first time a user logs in. Create the document safely.
-          if (!firebaseAuthUser.email) {
-            console.error("Firebase user object is missing email. Cannot create Firestore document.")
-            setUser(null); // Deny access if data is corrupted
-            setLoading(false)
-            return
-          }
+      const unsubscribe = onSnapshot(
+        userDocRef,
+        async (docSnap) => {
+          if (docSnap.exists()) {
+            // Document exists: update state with live data
+            const userData = docSnap.data() as Omit<User, "id">
+            setUser({ ...userData, id: firebaseAuthUser.uid })
+          } else {
+            // Document missing: This is a new user who signed up but the listener beat the write
+            // OR the first time a user logs in. Create the document safely.
+            if (!firebaseAuthUser.email) {
+              console.error("Firebase user object is missing email. Cannot create Firestore document.")
+              setUser(null) // Deny access if data is corrupted
+              setLoading(false)
+              return
+            }
 
-          const newUserData: User = {
-            id: firebaseAuthUser.uid,
-            email: firebaseAuthUser.email,
-            name: firebaseAuthUser.displayName || firebaseAuthUser.email.split('@')[0] || "User",
-            chatsLeft: 3, // Initial credits
-          }
-          
-          // Safety check: ensure we only write the document if it's missing (should only happen once)
-          const docCheck = await getDoc(userDocRef);
-          if (!docCheck.exists()){
-             await setDoc(userDocRef, newUserData);
-          }
+            const newUserData: User = {
+              id: firebaseAuthUser.uid,
+              email: firebaseAuthUser.email,
+              name: firebaseAuthUser.displayName || firebaseAuthUser.email.split("@")[0] || "User",
+              chatsLeft: 3, // Initial credits
+            }
 
-          setUser(newUserData)
-        }
-        setLoading(false) // Only set loading to false AFTER the data fetch succeeds
-      }, (error) => {
-        // Handle listener errors (e.g., security rule issues)
-        console.error("Firestore snapshot error:", error);
-        setUser(null);
-        setLoading(false);
-      })
-      
+            // Safety check: ensure we only write the document if it's missing (should only happen once)
+            const docCheck = await getDoc(userDocRef)
+            if (!docCheck.exists()) {
+              await setDoc(userDocRef, newUserData)
+            }
+
+            setUser(newUserData)
+          }
+          setLoading(false) // Only set loading to false AFTER the data fetch succeeds
+        },
+        (error) => {
+          // Handle listener errors (e.g., security rule issues)
+          console.error("Firestore snapshot error:", error)
+          setUser(null)
+          setLoading(false)
+        },
+      )
+
       // Save the unsubscribe function for manual cleanup
       setUserSnapshotUnsubscribe(() => unsubscribe)
 
       // Initial loading state while waiting for the first snapshot
-      setLoading(true);
-      
-      return () => unsubscribe(); // Cleanup on unmount/dependency change
+      setLoading(true)
+
+      return () => unsubscribe() // Cleanup on unmount/dependency change
     } else {
-        // No authenticated user
-        setUser(null);
-        setLoading(false);
+      // No authenticated user
+      setUser(null)
+      setLoading(false)
     }
   }, [firebaseAuthUser]) // <-- DEPENDENCY: Runs ONLY when Firebase Auth status changes
 
   // --- Auth Functions (Unchanged) ---
-  
+
   const login = async (email: string, password: string): Promise<boolean> => {
     setLoading(true)
     try {
+      console.log("[v0] Attempting login with email:", email)
       await signInWithEmailAndPassword(auth, email, password)
+      console.log("[v0] Login successful")
       return true
-    } catch (error) {
-      console.error("Login failed:", error)
+    } catch (error: any) {
+      console.error("[v0] Login failed with error code:", error.code)
+      console.error("[v0] Login error message:", error.message)
       setLoading(false)
       return false
     }
@@ -141,16 +148,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (email: string, password: string, name: string): Promise<boolean> => {
     setLoading(true)
     try {
+      console.log("[v0] Attempting signup with email:", email)
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-      
+      console.log("[v0] User created successfully")
+
       await updateProfile(userCredential.user, {
         displayName: name,
-      });
+      })
 
-      // The Firestore document creation is now handled automatically by the onSnapshot listener 
-      // if it detects the document is missing (docSnap.exists() === false), 
-      // ensuring robust state sync. However, we'll keep the direct write here for immediate feedback 
-      // and compatibility with the auth listener logic above.
       const userDocRef = doc(db, "users", userCredential.user.uid)
       const newUserData: User = {
         id: userCredential.user.uid,
@@ -159,10 +164,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         chatsLeft: 3,
       }
       await setDoc(userDocRef, newUserData)
-      
+      console.log("[v0] Firestore user document created")
+
       return true
-    } catch (error) {
-      console.error("Signup failed:", error)
+    } catch (error: any) {
+      console.error("[v0] Signup failed with error code:", error.code)
+      console.error("[v0] Signup error message:", error.message)
       setLoading(false)
       return false
     }
@@ -171,8 +178,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     // CRITICAL FIX: Explicitly unsubscribe the Firestore listener before logging out
     if (userSnapshotUnsubscribe) {
-        userSnapshotUnsubscribe()
-        setUserSnapshotUnsubscribe(null)
+      userSnapshotUnsubscribe()
+      setUserSnapshotUnsubscribe(null)
     }
     signOut(auth)
   }

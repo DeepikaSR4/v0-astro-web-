@@ -28,24 +28,6 @@ interface ChatInterfaceProps {
   // Removed icon, iconColor, and bgGradient from props
 }
 
-const mockResponses = {
-    love: [
-    "The stars reveal that Venus is strongly positioned in your chart, suggesting a period of romantic growth ahead. Your heart chakra is opening to new possibilities.",
-    "I sense a deep connection forming in your near future. The cosmic energies suggest someone with earth sign qualities may play a significant role in your love life.",
-    "Your romantic journey is guided by the moon's phases. Trust your intuition when it comes to matters of the heart - the universe is aligning to bring you closer to your soulmate.",
-  ],
-  career: [
-    "Jupiter's influence in your career sector indicates expansion and new opportunities on the horizon. Your professional skills are about to be recognized in unexpected ways.",
-    "The planetary alignment suggests a significant career shift within the next few months. Trust your instincts and be open to leadership roles that may present themselves.",
-    "Your career path is illuminated by Mercury's wisdom. Communication and networking will be key to unlocking your next professional breakthrough.",
-  ],
-  finance: [
-    "The cosmic forces indicate a favorable period for financial growth. Saturn's discipline combined with Jupiter's abundance suggests wise investments will flourish.",
-    "Your financial intuition is heightened by the current lunar cycle. Trust your instincts about money matters, but remember to balance risk with security.",
-    "The stars align to bring unexpected financial opportunities. Keep your eyes open for partnerships or investments that resonate with your values.",
-  ],
-}
-
 const iconMap: Record<ChatInterfaceProps["type"], LucideIcon> = {
   love: Heart,
   career: Briefcase,
@@ -72,7 +54,7 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
   const { user, decrementChats } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
-  
+
   const Icon = iconMap[type]
   const iconColor = iconColorMap[type]
   const bgGradient = bgGradientMap[type]
@@ -126,14 +108,35 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
     setInputValue("")
     setIsLoading(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = mockResponses[type]
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, { role: "user", content: inputValue, isUser: true }],
+          type: type,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No response body")
+
+      let fullResponse = ""
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        fullResponse += decoder.decode(value, { stream: true })
+      }
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: randomResponse,
+        content: fullResponse,
         isUser: false,
         timestamp: new Date(),
       }
@@ -146,7 +149,15 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
         title: "Consultation complete",
         description: `You have ${user.chatsLeft - 1} consultations remaining.`,
       })
-    }, 2000)
+    } catch (error) {
+      console.error("Error sending message:", error)
+      setIsLoading(false)
+      toast({
+        title: "Error",
+        description: "Failed to get response from Astro. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
