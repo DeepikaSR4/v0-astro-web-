@@ -1,5 +1,4 @@
 import { Navbar } from "@/components/navbar"
-import { Footer } from "@/components/footer"
 import { HomeChatInterface } from "@/components/home-chat-interface"
 
 export default function ChatPage() {
@@ -9,7 +8,6 @@ export default function ChatPage() {
       <main className="flex-1">
         <HomeChatInterface />
       </main>
-      <Footer />
     </div>
   )
 }

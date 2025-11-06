@@ -1,10 +1,9 @@
-// components/chat-interface.tsx
 "use client"
 
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -25,7 +24,6 @@ interface ChatInterfaceProps {
   type: "love" | "career" | "finance"
   title: string
   description: string
-  // Removed icon, iconColor, and bgGradient from props
 }
 
 const iconMap: Record<ChatInterfaceProps["type"], LucideIcon> = {
@@ -50,62 +48,67 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [hasInitialized, setHasInitialized] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { user, decrementChats } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const Icon = iconMap[type]
   const iconColor = iconColorMap[type]
   const bgGradient = bgGradientMap[type]
 
   useEffect(() => {
-    if (!user) {
-      router.push("/login")
-      return
-    }
+    if (hasInitialized) return
 
     // Add welcome message
     const welcomeMessage: Message = {
       id: "welcome",
-      content: `Welcome to your ${title.toLowerCase()} consultation! I'm Astro, your cosmic guide. Ask me anything about your ${type} and I'll consult the stars for insights.`,
+      content: `Welcome to your ${title.toLowerCase()} consultation! I'm Astro, your professional astrologer. To provide you with accurate astrological insights, I'll need your Date of Birth (including year) and your name. Could you share these details?`,
       isUser: false,
       timestamp: new Date(),
     }
     setMessages([welcomeMessage])
-  }, [user, router, title, type])
+
+    const messageParam = searchParams.get("message")
+    if (messageParam) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: messageParam,
+        isUser: true,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, userMessage])
+      setInputValue("")
+      // Trigger sending the message
+      setTimeout(() => {
+        handleSendMessage(messageParam)
+      }, 100)
+    }
+
+    setHasInitialized(true)
+  }, [hasInitialized])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return
+  const handleSendMessage = async (messageContent?: string) => {
+    const contentToSend = messageContent || inputValue
+    if (!contentToSend.trim() || isLoading) return
 
-    if (!user) {
-      router.push("/login")
-      return
+    if (!messageContent) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: contentToSend,
+        isUser: true,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, userMessage])
+      setInputValue("")
     }
 
-    if (user.chatsLeft <= 0) {
-      toast({
-        title: "No consultations remaining",
-        description: "Purchase more consultations to continue.",
-        variant: "destructive",
-      })
-      router.push("/pricing")
-      return
-    }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue,
-      isUser: true,
-      timestamp: new Date(),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
     setIsLoading(true)
 
     try {
@@ -113,7 +116,7 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, { role: "user", content: inputValue, isUser: true }],
+          messages: [...messages, { role: "user", content: contentToSend, isUser: true }],
           type: type,
         }),
       })
@@ -143,12 +146,14 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
 
       setMessages((prev) => [...prev, aiMessage])
       setIsLoading(false)
-      decrementChats()
 
-      toast({
-        title: "Consultation complete",
-        description: `You have ${user.chatsLeft - 1} consultations remaining.`,
-      })
+      if (user) {
+        decrementChats()
+        toast({
+          title: "Consultation complete",
+          description: `You have ${user.chatsLeft - 1} consultations remaining.`,
+        })
+      }
     } catch (error) {
       console.error("Error sending message:", error)
       setIsLoading(false)
@@ -165,10 +170,6 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
       e.preventDefault()
       handleSendMessage()
     }
-  }
-
-  if (!user) {
-    return null
   }
 
   return (
@@ -195,10 +196,12 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
           </div>
 
           <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-2 px-3 py-1 bg-background/80 rounded-full">
-              <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              <span className="text-sm font-medium">{user.chatsLeft} consultations remaining</span>
-            </div>
+            {user && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-background/80 rounded-full">
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                <span className="text-sm font-medium">{user.chatsLeft} consultations remaining</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Sparkles className="h-4 w-4" />
               <span>Powered by cosmic wisdom</span>
@@ -208,7 +211,7 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 container mx-auto px-4 py-6 max-w-4xl">
+      <div className="flex-1 container mx-auto px-4 py-6 max-w-4xl overflow-y-auto pb-32">
         <div className="space-y-6">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}>
@@ -261,7 +264,7 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
       </div>
 
       {/* Input Area */}
-      <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 max-w-4xl">
           <div className="flex gap-2">
             <Input
@@ -270,21 +273,12 @@ export function ChatInterface({ type, title, description }: ChatInterfaceProps) 
               onKeyPress={handleKeyPress}
               placeholder={`Ask Astro about your ${type}...`}
               className="flex-1"
-              disabled={isLoading || user.chatsLeft <= 0}
+              disabled={isLoading}
             />
-            <Button onClick={handleSendMessage} disabled={!inputValue.trim() || isLoading || user.chatsLeft <= 0}>
+            <Button onClick={() => handleSendMessage()} disabled={!inputValue.trim() || isLoading}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
-
-          {user.chatsLeft <= 0 && (
-            <div className="mt-3 text-center">
-              <p className="text-sm text-muted-foreground mb-2">You've used all your free consultations.</p>
-              <Button size="sm" onClick={() => router.push("/pricing")}>
-                Get More Consultations
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </div>
